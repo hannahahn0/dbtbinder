@@ -131,15 +131,51 @@ function home() {
   const tiles = MODULES.map((m) => {
     const n = SKILLS.filter((s) => s.module === m.id).length;
     return `<button class="tile" onclick="location.hash='#/m/${m.id}'">
-      <span class="emoji">${m.emoji}</span><span><div class="t">${esc(m.title)}</div><div class="n">${n} item${n === 1 ? "" : "s"}</div></span></button>`;
+      <span class="emoji">${m.emoji}</span><span><div class="t">${esc(m.title)}</div>
+      <div class="p">${esc((typeof PLAIN !== "undefined" && PLAIN[m.id]) || "")}</div><div class="n">${n} item${n === 1 ? "" : "s"}</div></span></button>`;
   }).join("");
   return `
     <h1>My DBT Binder</h1>
     <p class="sub">Everything from IOP, in your pocket.</p>
+    <div class="section-label">What do you need right now?</div>
+    <button class="need warm" onclick="location.hash='#/flow/dt'"><span class="emoji">🌊</span>
+      <span><b>I'm overwhelmed or in distress</b><span>Answer 1–2 questions, get the skills to use</span></span></button>
+    <button class="need calm" onclick="location.hash='#/flow/er'"><span class="emoji">💭</span>
+      <span><b>I have a feeling I want to handle</b><span>Figure out what to do with it, step by step</span></span></button>
     <input class="search" type="search" placeholder="Search skills, e.g. TIPP, validate, shame…" onfocus="location.hash='#/search'">
-    <button class="sos" onclick="location.hash='#/sos'"><span class="emoji">🌊</span>
-      <span><b>I'm overwhelmed right now</b>Crisis survival skills — fastest first</span></button>
+    <div class="section-label">Browse your binder</div>
     <div class="grid">${tiles}</div>`;
+}
+
+function flowView(fid, pathStr) {
+  const f = FLOWS[fid];
+  if (!f) return notFound();
+  const path = (pathStr || f.start).split(".").filter((id) => f.nodes[id]);
+  if (!path.length) path.push(f.start);
+  const id = path[path.length - 1], n = f.nodes[id];
+  const trail = path.slice(1).map((pid, i) => {
+    const prev = f.nodes[path[i]];
+    const o = prev && prev.opts && prev.opts.find((x) => x.to === pid);
+    return o ? `<span>${esc(o.t)}</span>` : "";
+  }).join("");
+  const go = (to) => (to.startsWith("#") ? to : `#/flow/${fid}/${path.join(".")}.${to}`);
+  let body;
+  if (!n.end) {
+    body = `<h2 class="q">${esc(n.q)}</h2>${n.hint ? `<p class="hint">${esc(n.hint)}</p>` : ""}
+      ${n.opts.map((o) => `<button class="opt ${o.tone || ""}" onclick="location.hash='${go(o.to)}'"><b>${esc(o.t)}</b>${o.d ? `<span>${esc(o.d)}</span>` : ""}</button>`).join("")}`;
+  } else {
+    const links = (n.links || []).map((sid) => skillById[sid]).filter(Boolean)
+      .map((s) => `<a href="#/s/${s.id}">${esc(s.title.split(" — ")[0].split(" (")[0])} ›</a>`).join("");
+    body = `<div class="endbox"><h2>${esc(n.title)}</h2>${n.intro ? `<p>${n.intro}</p>` : ""}
+        <ol class="steps">${n.steps.map((x) => `<li>${x}</li>`).join("")}</ol>
+        ${n.note ? `<p class="hint">${n.note}</p>` : ""}
+        ${links ? `<div class="section-label" style="margin-top:8px">Full pages from your binder</div><div class="golinks">${links}</div>` : ""}</div>
+      ${n.crisis ? `<div class="crisis">${CRISIS}</div>` : ""}
+      ${(n.next || []).map((x) => `<a class="nextbtn ${x.ghost ? "ghost" : ""}" href="${go(x.to)}">${esc(x.t)}</a>`).join("")}`;
+  }
+  return `<button class="back" onclick="history.back()">‹ Back</button>
+    <div class="section-label" style="margin-top:6px">${f.emoji} ${esc(f.title)}</div>
+    ${trail ? `<div class="trail">${trail}</div>` : ""}${body}`;
 }
 
 function moduleView(id) {
@@ -211,6 +247,7 @@ function render() {
   else if (kind === "m") html = moduleView(arg);
   else if (kind === "s") html = skillView(arg);
   else if (kind === "sos") html = sosView();
+  else if (kind === "flow") html = flowView(arg, h.split("/")[3]);
   else if (kind.startsWith("search")) { html = searchView(decodeURIComponent(arg || "")); tab = "search"; }
   else if (kind === "saved") { html = savedView(); tab = "saved"; }
   else html = notFound();
